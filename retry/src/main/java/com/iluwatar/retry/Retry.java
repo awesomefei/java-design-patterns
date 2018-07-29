@@ -40,7 +40,8 @@ import java.util.function.Predicate;
 public final class Retry<T> implements BusinessOperation<T> {
   private final BusinessOperation<T> op;
   private final int maxAttempts;
-  private final long delay;
+  private final long intervalMillis;
+  private final double multiplier;
   private final AtomicInteger attempts;
   private final Predicate<Exception> test;
   private final List<Exception> errors;
@@ -50,7 +51,8 @@ public final class Retry<T> implements BusinessOperation<T> {
    * 
    * @param op the {@link BusinessOperation} to retry
    * @param maxAttempts number of times to retry
-   * @param delay delay (in milliseconds) between attempts
+   * @param initIntervalMillis initial retry interval in milliseconds
+   * @param multiplier the value to multiply the current interval with for each retry attempt
    * @param ignoreTests tests to check whether the remote exception can be ignored. No exceptions
    *     will be ignored if no tests are given
    */
@@ -58,13 +60,15 @@ public final class Retry<T> implements BusinessOperation<T> {
   public Retry(
       BusinessOperation<T> op, 
       int maxAttempts, 
-      long delay, 
+      long initIntervalMillis, 
+      double multiplier,
       Predicate<Exception>... ignoreTests
   ) {
     this.op = op;
     this.maxAttempts = maxAttempts;
-    this.delay = delay;
     this.attempts = new AtomicInteger();
+    this.intervalMillis = initIntervalMillis;
+    this.multiplier = multiplier;
     this.test = Arrays.stream(ignoreTests).reduce(Predicate::or).orElse(e -> false);
     this.errors = new ArrayList<>();
   }
@@ -100,7 +104,8 @@ public final class Retry<T> implements BusinessOperation<T> {
         }
 
         try {
-          Thread.sleep(this.delay);
+          Thread.sleep(intervalMillis);
+          intervalMillis = intervalMillis * multiplier;
         } catch (InterruptedException f) {
           //ignore
         }
